@@ -23,7 +23,7 @@ var HyperlinkReader = require('./hyperlink-reader');
 
 var Temp = require('temp');
 
-var WorkbookReader = module.exports = function(options) {
+var WorkbookReader = module.exports = function (options) {
   this.options = options = options || {};
 
   this.styles = new StyleManager();
@@ -48,7 +48,7 @@ var WorkbookReader = module.exports = function(options) {
 };
 
 utils.inherits(WorkbookReader, events.EventEmitter, {
-  _getStream: function(input) {
+  _getStream: function _getStream(input) {
     if (input instanceof Stream.Readable) {
       return input;
     }
@@ -72,11 +72,13 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
     hyperlinks: ['cache', 'emit'],
     worksheets: ['emit']
   },
-  read: function(input, options) {
+  read: function read(input, options) {
+    var _this = this;
+
     var stream = this.stream = this._getStream(input);
     var zip = this.zip = unzip.Parse();
-    
-    zip.on('entry', entry => {
+
+    zip.on('entry', function (entry) {
       var match, sheetNo;
       // console.log(entry.path);
       switch (entry.path) {
@@ -85,29 +87,29 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
           entry.autodrain();
           break;
         case 'xl/workbook.xml':
-          this._parseWorkbook(entry, options);
+          _this._parseWorkbook(entry, options);
           break;
         case 'xl/sharedStrings.xml':
-          this._parseSharedStrings(entry, options);
+          _this._parseSharedStrings(entry, options);
           break;
         case 'xl/styles.xml':
-          this._parseStyles(entry, options);
+          _this._parseStyles(entry, options);
           break;
         default:
           if (entry.path.match(/xl\/worksheets\/sheet\d+[.]xml/)) {
             match = entry.path.match(/xl\/worksheets\/sheet(\d+)[.]xml/);
             sheetNo = match[1];
-            if (this.sharedStrings) {
-              this._parseWorksheet(entry, sheetNo, options);
+            if (_this.sharedStrings) {
+              _this._parseWorksheet(entry, sheetNo, options);
             } else {
               var stream = Temp.createWriteStream();
-              this.waitingWorkSheets.push({sheetNo: sheetNo, options: options, path: stream.path});
+              _this.waitingWorkSheets.push({ sheetNo: sheetNo, options: options, path: stream.path });
               entry.pipe(stream);
             }
           } else if (entry.path.match(/xl\/worksheets\/_rels\/sheet\d+[.]xml.rels/)) {
             match = entry.path.match(/xl\/worksheets\/_rels\/sheet(\d+)[.]xml.rels/);
             sheetNo = match[1];
-            this._parseHyperlinks(entry, sheetNo, options);
+            _this._parseHyperlinks(entry, sheetNo, options);
           } else {
             entry.autodrain();
           }
@@ -115,66 +117,64 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
       }
     });
 
-    zip.on('close', () => {
-      var self = this;
-      if (this.waitingWorkSheets.length) {
-          var currentBook = 0;
+    zip.on('close', function () {
+      var self = _this;
+      if (_this.waitingWorkSheets.length) {
+        var currentBook = 0;
 
-          var processBooks = function () {
-              var worksheetInfo = self.waitingWorkSheets[currentBook];
-              var entry = fs.createReadStream(worksheetInfo.path);
+        var processBooks = function processBooks() {
+          var worksheetInfo = self.waitingWorkSheets[currentBook];
+          var entry = fs.createReadStream(worksheetInfo.path);
 
-              var sheetNo = worksheetInfo.sheetNo;
-              var options = worksheetInfo.options;
-              var worksheet = self._parseWorksheet(entry, sheetNo, options);
+          var sheetNo = worksheetInfo.sheetNo;
+          var options = worksheetInfo.options;
+          var worksheet = self._parseWorksheet(entry, sheetNo, options);
 
-              worksheet.on('finished', function (node) {
-                  ++currentBook;
-                  if (currentBook == self.waitingWorkSheets.length) {
-                      Temp.cleanupSync();
-                      // setImmediate(this.emit.bind(this), 'finished');
+          worksheet.on('finished', function (node) {
+            ++currentBook;
+            if (currentBook == self.waitingWorkSheets.length) {
+              Temp.cleanupSync();
+              // setImmediate(this.emit.bind(this), 'finished');
 
-                      self.emit('end');
-                      self.atEnd = true;
-                      if (!self.readers) {
-                          self.emit('finished');
-                      }
-                  } else {
-                      setImmediate(processBooks);
-                  }
-              })
-          }
-          setImmediate(processBooks);
+              self.emit('end');
+              self.atEnd = true;
+              if (!self.readers) {
+                self.emit('finished');
+              }
+            } else {
+              setImmediate(processBooks);
+            }
+          });
+        };
+        setImmediate(processBooks);
       } else {
-          this.emit('end');
-          this.atEnd = true;
-          if (!this.readers) {
-              this.emit('finished');
-          }
+        _this.emit('end');
+        _this.atEnd = true;
+        if (!_this.readers) {
+          _this.emit('finished');
+        }
       }
-
-      
     });
 
-    zip.on('error', err => {
-      this.emit('error', err);
+    zip.on('error', function (err) {
+      _this.emit('error', err);
     });
 
     // Pipe stream into top flow-control
     // this.flowControl.pipe(zip);
     stream.pipe(zip);
   },
-  _emitEntry: function(options, payload) {
+  _emitEntry: function _emitEntry(options, payload) {
     if (options.entries === 'emit') {
       this.emit('entry', payload);
     }
   },
-  _parseWorkbook: function(entry, options) {
-    this._emitEntry(options, {type: 'workbook'});
+  _parseWorkbook: function _parseWorkbook(entry, options) {
+    this._emitEntry(options, { type: 'workbook' });
     this.properties.parseStream(entry);
   },
-  _parseSharedStrings: function(entry, options) {
-    this._emitEntry(options, {type: 'shared-strings'});
+  _parseSharedStrings: function _parseSharedStrings(entry, options) {
+    this._emitEntry(options, { type: 'shared-strings' });
     var self = this;
     var sharedStrings = null;
     switch (options.sharedStrings) {
@@ -192,32 +192,32 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
     var inT = false;
     var t = null;
     var index = 0;
-    parser.on('opentag', function(node) {
+    parser.on('opentag', function (node) {
       if (node.name === 't') {
         t = null;
         inT = true;
       }
     });
-    parser.on('closetag', function(name) {
-      if (inT && (name === 't')) {
+    parser.on('closetag', function (name) {
+      if (inT && name === 't') {
         if (sharedStrings) {
           sharedStrings.push(t);
         } else {
-          self.emit('shared-string', { index: index++, text: t});
+          self.emit('shared-string', { index: index++, text: t });
         }
         t = null;
       }
     });
-    parser.on('text', function(text) {
+    parser.on('text', function (text) {
       t = t ? t + text : text;
     });
-    parser.on('error', function(error) {
+    parser.on('error', function (error) {
       self.emit('error', error);
     });
     entry.pipe(parser);
   },
-  _parseStyles: function(entry, options) {
-    this._emitEntry(options, {type: 'styles'});
+  _parseStyles: function _parseStyles(entry, options) {
+    this._emitEntry(options, { type: 'styles' });
     if (options.styles !== 'cache') {
       entry.autodrain();
       return;
@@ -225,14 +225,14 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
     this.styles = new StyleManager();
     this.styles.parseStream(entry);
   },
-  _getReader: function(Type, collection, sheetNo) {
+  _getReader: function _getReader(Type, collection, sheetNo) {
     var self = this;
     var reader = collection[sheetNo];
     if (!reader) {
       reader = new Type(this, sheetNo);
       self.readers++;
-      reader.on('finished', function() {
-        if (!--self.readers) {
+      reader.on('finished', function () {
+        if (! --self.readers) {
           if (self.atEnd) {
             self.emit('finished');
           }
@@ -242,8 +242,8 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
     }
     return reader;
   },
-  _parseWorksheet: function(entry, sheetNo, options) {
-    this._emitEntry(options, {type: 'worksheet', id: sheetNo});
+  _parseWorksheet: function _parseWorksheet(entry, sheetNo, options) {
+    this._emitEntry(options, { type: 'worksheet', id: sheetNo });
     var worksheetReader = this._getReader(WorksheetReader, this.worksheetReaders, sheetNo);
     if (options.worksheets === 'emit') {
       this.emit('worksheet', worksheetReader);
@@ -251,8 +251,8 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
     worksheetReader.read(entry, options, this.hyperlinkReaders[sheetNo]);
     return worksheetReader;
   },
-  _parseHyperlinks: function(entry, sheetNo, options) {
-    this._emitEntry(options, {type: 'hyerlinks', id: sheetNo});
+  _parseHyperlinks: function _parseHyperlinks(entry, sheetNo, options) {
+    this._emitEntry(options, { type: 'hyerlinks', id: sheetNo });
     var hyperlinksReader = this._getReader(HyperlinkReader, this.hyperlinkReaders, sheetNo);
     if (options.hyperlinks === 'emit') {
       this.emit('hyperlinks', hyperlinksReader);
@@ -260,3 +260,4 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
     hyperlinksReader.read(entry, options);
   }
 });
+//# sourceMappingURL=workbook-reader.js.map
