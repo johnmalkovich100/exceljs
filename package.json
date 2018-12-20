@@ -66,7 +66,7 @@
     "promish": ">=5.0.2",
     "sax": "^1.2.2",
     "temp": "0.8.3",
-    "unzipper-fork": "https://github.com/johnmalkovich100/node-unzipper#dce34c76c2eecce8697fb4405afe38904b60f84d"
+    "unzipper": "^0.9.7"
   },
   "devDependencies": {
     "babel-eslint": "^7.2.0",
