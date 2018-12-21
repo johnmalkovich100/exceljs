@@ -99,7 +99,7 @@ utils.inherits(WorksheetReader, events.EventEmitter, {
     this.emit('row', row);
   },
 
-  read: function read(entry, options) {
+  read: function read(entry, options, xxx, saxClose) {
     var _this = this;
 
     var emitSheet = false;
@@ -146,7 +146,20 @@ utils.inherits(WorksheetReader, events.EventEmitter, {
     var c = null;
     var current = null;
 
+    // true means strict mode, we need this to be able to interrupt stream
+    // with emitting error event
     var parser = Sax.createStream(true, {});
+
+    saxClose.on('close', function () {
+      try {
+        parser.removeAllListeners();
+        parser.end();
+      } catch (err) {
+        // Omitted by intetion to abort Sax parsing rest of the stream
+        // TODO this will throw error in console, to fix this we need to fork Sax
+      }
+    });
+
     parser.on('opentag', function (node) {
       if (emitSheet) {
         switch (node.name) {
