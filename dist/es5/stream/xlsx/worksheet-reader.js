@@ -151,13 +151,8 @@ utils.inherits(WorksheetReader, events.EventEmitter, {
     var parser = Sax.createStream(true, {});
 
     saxClose.on('close', function () {
-      try {
-        parser.removeAllListeners();
-        parser.end();
-      } catch (err) {
-        // Omitted by intetion to abort Sax parsing rest of the stream
-        // TODO this will throw error in console, to fix this we need to fork Sax
-      }
+      var isAborted = true;
+      parser.end(null, isAborted);
     });
 
     parser.on('opentag', function (node) {
