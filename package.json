@@ -64,7 +64,7 @@
     "jszip": "3.1.3",
     "moment": ">=2.19.3",
     "promish": ">=5.0.2",
-    "sax": "^1.2.2",
+    "sax": "https://github.com/marecica2/sax-js#5b91cb0c68e67a23508a90a795d1a27beeb286e6",
     "temp": "0.8.3",
     "unzipper": "^0.9.7"
   },
