@@ -78,6 +78,11 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
     var stream = this.stream = this._getStream(input);
     var zip = this.zip = unzip.Parse();
 
+    var saxClose = new events.EventEmitter();
+    stream.once('close', function () {
+      saxClose.emit('close');
+    });
+
     zip.on('entry', function (entry) {
       var match, sheetNo;
       // console.log(entry.path);
@@ -100,7 +105,7 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
             match = entry.path.match(/xl\/worksheets\/sheet(\d+)[.]xml/);
             sheetNo = match[1];
             if (_this.sharedStrings) {
-              _this._parseWorksheet(entry, sheetNo, options);
+              _this._parseWorksheet(entry, sheetNo, options, saxClose);
             } else {
               var stream = Temp.createWriteStream();
               _this.waitingWorkSheets.push({ sheetNo: sheetNo, options: options, path: stream.path });
@@ -109,7 +114,7 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
           } else if (entry.path.match(/xl\/worksheets\/_rels\/sheet\d+[.]xml.rels/)) {
             match = entry.path.match(/xl\/worksheets\/_rels\/sheet(\d+)[.]xml.rels/);
             sheetNo = match[1];
-            _this._parseHyperlinks(entry, sheetNo, options);
+            _this._parseHyperlinks(entry, sheetNo, options, saxClose);
           } else {
             entry.autodrain();
           }
@@ -128,7 +133,7 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
 
           var sheetNo = worksheetInfo.sheetNo;
           var options = worksheetInfo.options;
-          var worksheet = self._parseWorksheet(entry, sheetNo, options);
+          var worksheet = self._parseWorksheet(entry, sheetNo, options, saxClose);
 
           worksheet.on('finished', function (node) {
             ++currentBook;
@@ -242,22 +247,22 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
     }
     return reader;
   },
-  _parseWorksheet: function _parseWorksheet(entry, sheetNo, options) {
+  _parseWorksheet: function _parseWorksheet(entry, sheetNo, options, saxClose) {
     this._emitEntry(options, { type: 'worksheet', id: sheetNo });
     var worksheetReader = this._getReader(WorksheetReader, this.worksheetReaders, sheetNo);
     if (options.worksheets === 'emit') {
       this.emit('worksheet', worksheetReader);
     }
-    worksheetReader.read(entry, options, this.hyperlinkReaders[sheetNo]);
+    worksheetReader.read(entry, options, this.hyperlinkReaders[sheetNo], saxClose);
     return worksheetReader;
   },
-  _parseHyperlinks: function _parseHyperlinks(entry, sheetNo, options) {
+  _parseHyperlinks: function _parseHyperlinks(entry, sheetNo, options, saxClose) {
     this._emitEntry(options, { type: 'hyerlinks', id: sheetNo });
     var hyperlinksReader = this._getReader(HyperlinkReader, this.hyperlinkReaders, sheetNo);
     if (options.hyperlinks === 'emit') {
       this.emit('hyperlinks', hyperlinksReader);
     }
-    hyperlinksReader.read(entry, options);
+    hyperlinksReader.read(entry, options, saxClose);
   }
 });
 //# sourceMappingURL=workbook-reader.js.map
