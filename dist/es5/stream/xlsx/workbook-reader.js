@@ -11,6 +11,7 @@ var events = require('events');
 var Stream = require('stream');
 var unzip = require('unzipper');
 var Sax = require('sax');
+var tmp = require('tmp');
 
 var utils = require('../../utils/utils');
 var FlowControl = require('../../utils/flow-control');
@@ -21,7 +22,7 @@ var WorkbookPropertiesManager = require('../../xlsx/xform/book/workbook-properti
 var WorksheetReader = require('./worksheet-reader');
 var HyperlinkReader = require('./hyperlink-reader');
 
-var Temp = require('temp');
+tmp.setGracefulCleanup();
 
 var WorkbookReader = module.exports = function (options) {
   this.options = options = options || {};
@@ -43,8 +44,11 @@ var WorkbookReader = module.exports = function (options) {
   // end of stream check
   this.atEnd = false;
 
-  Temp.track();
+  // worksheets, deferred for parsing after shared strings reading
   this.waitingWorkSheets = [];
+
+  // callbacks for temp files cleanup
+  this.tempFileCleanupCallbacks = [];
 };
 
 utils.inherits(WorkbookReader, events.EventEmitter, {
@@ -77,6 +81,7 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
 
     var stream = this.stream = this._getStream(input);
     var zip = this.zip = unzip.Parse();
+    var self = this;
 
     var saxClose = new events.EventEmitter();
     stream.once('close', function () {
@@ -107,9 +112,17 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
             if (_this.sharedStrings) {
               _this._parseWorksheet(entry, sheetNo, options, saxClose);
             } else {
-              var stream = Temp.createWriteStream();
-              _this.waitingWorkSheets.push({ sheetNo: sheetNo, options: options, path: stream.path });
-              entry.pipe(stream);
+              // create temp file for each worksheet
+              tmp.file(function _tempFileCreated(err, path, fd, cleanupCallback) {
+                if (err) throw err;
+
+                var tempStream = fs.createWriteStream(path);
+
+                self.waitingWorkSheets.push({ sheetNo: sheetNo, options: options, path: path });
+                entry.pipe(tempStream);
+
+                self.tempFileCleanupCallbacks.push(cleanupCallback);
+              });
             }
           } else if (entry.path.match(/xl\/worksheets\/_rels\/sheet\d+[.]xml.rels/)) {
             match = entry.path.match(/xl\/worksheets\/_rels\/sheet(\d+)[.]xml.rels/);
@@ -123,8 +136,7 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
     });
 
     zip.on('close', function () {
-      var self = _this;
-      if (_this.waitingWorkSheets.length) {
+      if (self.waitingWorkSheets.length) {
         var currentBook = 0;
 
         var processBooks = function processBooks() {
@@ -137,9 +149,13 @@ utils.inherits(WorkbookReader, events.EventEmitter, {
 
           worksheet.on('finished', function (node) {
             ++currentBook;
-            if (currentBook == self.waitingWorkSheets.length) {
-              Temp.cleanupSync();
-              // setImmediate(this.emit.bind(this), 'finished');
+            if (currentBook === self.waitingWorkSheets.length) {
+              // temp files cleaning up
+              self.tempFileCleanupCallbacks.forEach(function (cb) {
+                cb();
+              });
+
+              self.tempFileCleanupCallbacks = [];
 
               self.emit('end');
               self.atEnd = true;
